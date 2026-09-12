@@ -1,0 +1,27 @@
+substitutions:
+  _REGION: us-west1
+  _REPOSITORY: family-recipes
+  _IMAGE_TAG: v3.25.1-family.0
+  _COMMIT: unknown
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file
+      - docker/Dockerfile
+      - --build-arg
+      - COMMIT=${_COMMIT}
+      - --tag
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/mealie:${_IMAGE_TAG}
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/mealie:${_IMAGE_TAG}
+
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/mealie:${_IMAGE_TAG}
+
+options:
+  logging: CLOUD_LOGGING_ONLY

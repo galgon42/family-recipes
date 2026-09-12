@@ -1,0 +1,37 @@
+-- Run in the Supabase SQL Editor after replacing the password placeholder.
+-- Use a unique random application password and never commit the filled query.
+
+do $$
+begin
+    if not exists (select 1 from pg_roles where rolname = 'mealie_app') then
+        create role mealie_app
+            with login
+            password 'YOUR_NEW_RANDOM_PASSWORD'
+            nosuperuser
+            nocreatedb
+            nocreaterole;
+    else
+        alter role mealie_app
+            with login
+            password 'YOUR_NEW_RANDOM_PASSWORD'
+            nosuperuser
+            nocreatedb
+            nocreaterole;
+    end if;
+end
+$$;
+
+-- Keep the schema owned by the dashboard administrator. Supabase's SQL Editor
+-- cannot SET ROLE to an arbitrary custom role in order to transfer ownership.
+create schema if not exists mealie;
+
+grant connect on database postgres to mealie_app;
+grant usage, create on schema mealie to mealie_app;
+
+revoke all on schema mealie from anon;
+revoke all on schema mealie from authenticated;
+
+alter role mealie_app
+    in database postgres
+    set search_path = mealie;
+
