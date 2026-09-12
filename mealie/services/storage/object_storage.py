@@ -160,18 +160,12 @@ class S3ObjectStorage(ObjectStorage):
         self.client.delete_object(Bucket=self.bucket, Key=self._key(path))
 
     def delete_prefix(self, path: Path) -> None:
-        batch: list[dict[str, str]] = []
-        for item in self._objects(path):
-            key = item.get("Key")
-            if not key:
-                continue
-            batch.append({"Key": key})
-            if len(batch) == 1000:
-                self.client.delete_objects(Bucket=self.bucket, Delete={"Objects": batch, "Quiet": True})
-                batch = []
-
-        if batch:
-            self.client.delete_objects(Bucket=self.bucket, Delete={"Objects": batch, "Quiet": True})
+        # Supabase's S3 gateway supports DeleteObject but rejects the optional
+        # AWS multi-object DeleteObjects operation. Resolve the complete key
+        # list first so deleting a page cannot invalidate pagination tokens.
+        keys = [str(item["Key"]) for item in self._objects(path) if item.get("Key")]
+        for key in keys:
+            self.client.delete_object(Bucket=self.bucket, Key=key)
 
     def upload_tree(self, path: Path) -> None:
         if not path.exists():
