@@ -19,9 +19,10 @@ This directory deploys the pinned Mealie fork to Google Cloud Run and connects i
 5. Store the complete URL in Google Secret Manager under `supabase-postgres-url`. Never commit it.
 6. Enable Supabase Storage's S3 protocol and store its server-only credentials in Secret Manager as `supabase-s3-access-key-id` and `supabase-s3-secret-access-key`.
 7. Store two independent, randomly generated 64-character values as `mealie-auth-secret` and `mealie-session-secret`.
-8. Run `deploy.ps1 -ProjectId family-recipes-508022` from PowerShell.
+8. Create a Google OAuth web client with the authorized redirect URI set to the public Mealie URL followed by `/login`. Store its client ID and client secret as `mealie-oidc-client-id` and `mealie-oidc-client-secret`. While the Google app is in testing mode, add each permitted Google account as a test user.
+9. Run `deploy.ps1 -ProjectId family-recipes-508022 -BaseUrl <public-service-url>` from PowerShell.
 
-The script creates the Artifact Registry repository and a dedicated runtime service account if needed, builds the exact source commit using Cloud Build, grants that service account access only to the five named secrets, and deploys one always-allocated Cloud Run instance.
+The script creates the Artifact Registry repository and a dedicated runtime service account if needed, builds the exact source commit using Cloud Build, grants that service account access only to the seven named secrets, enables Google OIDC without automatic signup, and deploys one always-allocated Cloud Run instance. Password login remains available as a recovery path.
 
 ## Why one instance with always-allocated CPU?
 

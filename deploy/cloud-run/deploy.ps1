@@ -24,7 +24,17 @@ $StorageAccessKeySecret = "supabase-s3-access-key-id"
 $StorageSecretKeySecret = "supabase-s3-secret-access-key"
 $AuthSecret = "mealie-auth-secret"
 $SessionSecret = "mealie-session-secret"
-$RequiredSecrets = @($DatabaseSecret, $StorageAccessKeySecret, $StorageSecretKeySecret, $AuthSecret, $SessionSecret)
+$OidcClientIdSecret = "mealie-oidc-client-id"
+$OidcClientSecret = "mealie-oidc-client-secret"
+$RequiredSecrets = @(
+    $DatabaseSecret,
+    $StorageAccessKeySecret,
+    $StorageSecretKeySecret,
+    $AuthSecret,
+    $SessionSecret,
+    $OidcClientIdSecret,
+    $OidcClientSecret
+)
 $RuntimeAccountName = "family-recipes-runtime"
 $RuntimeAccount = "$RuntimeAccountName@$ProjectId.iam.gserviceaccount.com"
 $ImageUri = "$Region-docker.pkg.dev/$ProjectId/$RepositoryName/mealie`:$ImageTag"
@@ -90,9 +100,12 @@ $Environment = @(
     "API_PORT=8080",
     "DB_ENGINE=postgres",
     "ALLOW_SIGNUP=false",
-    "OIDC_AUTH_ENABLED=false",
+    "OIDC_AUTH_ENABLED=true",
     "OIDC_SIGNUP_ENABLED=false",
     "OIDC_REQUIRES_EMAIL_VERIFICATION=true",
+    "OIDC_CONFIGURATION_URL=https://accounts.google.com/.well-known/openid-configuration",
+    "OIDC_PROVIDER_NAME=Google",
+    "OIDC_REMEMBER_ME=true",
     "TZ=America/New_York",
     "UVICORN_WORKERS=1",
     "DATA_DIR=/tmp/mealie-data",
@@ -119,7 +132,7 @@ Invoke-GCloud run deploy $ServiceName `
     --timeout 300 `
     --no-cpu-throttling `
     --set-env-vars ($Environment -join ",") `
-    --set-secrets "POSTGRES_URL_OVERRIDE=$DatabaseSecret`:latest,SUPABASE_STORAGE_S3_ACCESS_KEY_ID=$StorageAccessKeySecret`:latest,SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY=$StorageSecretKeySecret`:latest,SECRET=$AuthSecret`:latest,SESSION_SECRET=$SessionSecret`:latest" `
+    --set-secrets "POSTGRES_URL_OVERRIDE=$DatabaseSecret`:latest,SUPABASE_STORAGE_S3_ACCESS_KEY_ID=$StorageAccessKeySecret`:latest,SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY=$StorageSecretKeySecret`:latest,SECRET=$AuthSecret`:latest,SESSION_SECRET=$SessionSecret`:latest,OIDC_CLIENT_ID=$OidcClientIdSecret`:latest,OIDC_CLIENT_SECRET=$OidcClientSecret`:latest" `
     --project $ProjectId
 
 $ServiceUrl = (& $GCloudPath run services describe $ServiceName --region $Region --project $ProjectId --format "value(status.url)").Trim()
