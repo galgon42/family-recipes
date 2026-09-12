@@ -139,7 +139,9 @@ COPY --from=venv-builder $VENV_PATH $VENV_PATH
 # install nltk data for the ingredient parser
 ENV NLTK_DATA="/nltk_data/"
 COPY ./docker/setup_nltk_data.sh $MEALIE_HOME/setup_nltk_data.sh
-RUN chmod +x $MEALIE_HOME/setup_nltk_data.sh && $MEALIE_HOME/setup_nltk_data.sh
+RUN sed -i 's/\r$//' $MEALIE_HOME/setup_nltk_data.sh \
+    && chmod +x $MEALIE_HOME/setup_nltk_data.sh \
+    && $MEALIE_HOME/setup_nltk_data.sh
 
 VOLUME [ "$MEALIE_HOME/data/" ]
 ENV APP_PORT=9000
@@ -147,7 +149,8 @@ ENV APP_PORT=9000
 EXPOSE ${APP_PORT}
 
 COPY ./docker/healthcheck.sh $MEALIE_HOME/healthcheck.sh
-RUN chmod +x $MEALIE_HOME/healthcheck.sh
+RUN sed -i 's/\r$//' $MEALIE_HOME/healthcheck.sh \
+    && chmod +x $MEALIE_HOME/healthcheck.sh
 HEALTHCHECK CMD $MEALIE_HOME/healthcheck.sh
 
 ENV HOST=0.0.0.0
@@ -155,5 +158,6 @@ ENV HOST=0.0.0.0
 EXPOSE ${APP_PORT}
 COPY ./docker/entry.sh $MEALIE_HOME/run.sh
 
-RUN chmod +x $MEALIE_HOME/run.sh
+RUN sed -i 's/\r$//' $MEALIE_HOME/run.sh \
+    && chmod +x $MEALIE_HOME/run.sh
 ENTRYPOINT ["/app/run.sh"]
