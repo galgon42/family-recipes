@@ -39,10 +39,10 @@ def check_needs_reprocess(recipe_id: UUID4) -> bool:
         tiny_path = service.dir_image / "tiny-original.webp"
         original_path = service.dir_image / "original.webp"
 
-        if not original_path.exists():
+        if not service.storage.materialize(original_path):
             return False  # Cannot reprocess without original image
 
-        if not tiny_path.exists():
+        if not service.storage.materialize(tiny_path):
             return True  # Needs reprocessing if tiny image is missing
 
     except Exception:
@@ -74,7 +74,7 @@ def fetch_recipe_ids(force_all: bool = False) -> set[UUID4]:
 def reprocess_recipe_images(recipe_id: UUID4, force_all: bool = False) -> None:
     service = RecipeDataService(recipe_id, logger=minifier_logger)
     original_image = service.dir_image / "original.webp"
-    if not original_image.exists():
+    if not service.storage.materialize(original_image):
         # Double-check that original image exists. We may have skipped this if we're using force_all
         logger.error(f"Original image missing for recipe {recipe_id}; cannot reprocess")
         return
@@ -86,6 +86,10 @@ def reprocess_recipe_images(recipe_id: UUID4, force_all: bool = False) -> None:
 
     try:
         service.minifier.minify(original_image, force=True)
+        for image_filename in NON_ORIGINAL_FILENAMES:
+            generated = service.dir_image / image_filename
+            if generated.is_file():
+                service.storage.upload(generated)
     except UnidentifiedImageError:
         pass  # source image is corrupted or invalid; skip
     except Exception:
@@ -93,6 +97,7 @@ def reprocess_recipe_images(recipe_id: UUID4, force_all: bool = False) -> None:
 
     # Reprocess timeline event images
     timeline_dir = service.dir_image_timeline
+    service.storage.materialize_prefix(timeline_dir)
     if not timeline_dir.exists():
         return
 
@@ -114,6 +119,10 @@ def reprocess_recipe_images(recipe_id: UUID4, force_all: bool = False) -> None:
                 image_file.unlink(missing_ok=True)
 
             service.minifier.minify(event_original, force=True)
+            for image_filename in NON_ORIGINAL_FILENAMES:
+                generated = event_dir / image_filename
+                if generated.is_file():
+                    service.storage.upload(generated)
         except Exception:
             # Silently skip these; they're not as important and there could be a lot of them which could spam logs
             continue

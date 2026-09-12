@@ -10,6 +10,7 @@ from mealie.routes._base import BaseUserController, controller
 from mealie.routes._base.routers import UserAPIRouter
 from mealie.routes.users._helpers import assert_user_change_allowed
 from mealie.schema.user import PrivateUser
+from mealie.services.storage import get_object_storage
 
 router = UserAPIRouter(prefix="", tags=["Users: Images"])
 
@@ -37,6 +38,7 @@ class UserImageController(BaseUserController):
             dest = PrivateUser.get_directory(id) / "profile.webp"
 
             shutil.copyfile(image, dest)
+            get_object_storage().upload(dest)
 
         self.repos.users.patch(id, {"cache_key": cache.new_key()})
 

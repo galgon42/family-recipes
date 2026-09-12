@@ -25,6 +25,7 @@ from mealie.routes import router, spa, utility_routes
 from mealie.routes.handlers import register_debug_handler
 from mealie.routes.media import media_router
 from mealie.services.scheduler import SchedulerRegistry, SchedulerService, tasks
+from mealie.services.storage import get_object_storage
 
 settings = get_app_settings()
 
@@ -60,6 +61,10 @@ async def lifespan_fn(_: FastAPI) -> AsyncGenerator[None, None]:
     See FastAPI documentation for more information:
       - https://fastapi.tiangolo.com/advanced/events/
     """
+    storage = get_object_storage()
+    storage.validate()
+    logger.info("object storage: %s", "Supabase S3" if storage.enabled else "local filesystem")
+
     logger.info("start: database initialization")
     import mealie.db.init_db as init_db
 

@@ -8,6 +8,7 @@ from mealie.assets import users as users_assets
 from mealie.core.config import get_app_settings
 from mealie.db.models.users.user_to_recipe import UserToRecipe
 from mealie.schema.user.user import PrivateUser, UserRatingOut
+from mealie.services.storage import get_object_storage
 
 from ..db.models.users import User
 from .repository_generic import GroupRepositoryGeneric
@@ -39,7 +40,9 @@ class RepositoryUsers(GroupRepositoryGeneric[PrivateUser, User]):
             users_assets.img_random_3,
         ]
         random_image = random.choice(all_images)
-        shutil.copy(random_image, new_user.directory() / "profile.webp")
+        profile_image = new_user.directory() / "profile.webp"
+        shutil.copy(random_image, profile_image)
+        get_object_storage().upload(profile_image)
 
         return new_user
 
@@ -61,7 +64,9 @@ class RepositoryUsers(GroupRepositoryGeneric[PrivateUser, User]):
 
         entry = super().delete(value, match_key)
         # Delete the user's directory
-        shutil.rmtree(PrivateUser.get_directory(value))
+        user_directory = PrivateUser.get_directory(value)
+        get_object_storage().delete_prefix(user_directory)
+        shutil.rmtree(user_directory)
         return entry
 
     def get_by_username(self, username: str) -> PrivateUser | None:

@@ -6,8 +6,16 @@ from tests.utils.fixture_schemas import TestUser
 
 
 def test_user_get_image(api_client: TestClient, unique_user: TestUser):
+    anonymous_response = api_client.get(
+        api_routes.media_users_user_id_file_name(str(unique_user.user_id), "profile.webp")
+    )
+    assert anonymous_response.status_code == 401
+
     # Get the user's image
-    response = api_client.get(api_routes.media_users_user_id_file_name(str(unique_user.user_id), "profile.webp"))
+    response = api_client.get(
+        api_routes.media_users_user_id_file_name(str(unique_user.user_id), "profile.webp"),
+        headers=unique_user.token,
+    )
     assert response.status_code == 200
 
     # Ensure that the returned value is a valid image
@@ -24,5 +32,8 @@ def test_user_update_image(api_client: TestClient, unique_user: TestUser):
     assert response.status_code == 200
 
     # Request the image again
-    response = api_client.get(api_routes.media_users_user_id_file_name(str(unique_user.user_id), "profile.webp"))
+    response = api_client.get(
+        api_routes.media_users_user_id_file_name(str(unique_user.user_id), "profile.webp"),
+        headers=unique_user.token,
+    )
     assert response.status_code == 200

@@ -9,6 +9,7 @@ from mealie.pkgs import img, safehttp
 from mealie.schema.recipe.recipe import Recipe
 from mealie.schema.recipe.recipe_image_types import RecipeImageTypes
 from mealie.services._base_service import BaseService
+from mealie.services.storage import get_object_storage
 
 
 async def gather_with_concurrency(n, *coros, ignore_exceptions=False):
@@ -72,11 +73,14 @@ class RecipeDataService(BaseService):
         self.dir_image = self.dir_data.joinpath("images")
         self.dir_image_timeline = self.dir_image.joinpath("timeline")
         self.dir_assets = self.dir_data.joinpath("assets")
+        self.dir_source = self.dir_data.joinpath("source")
+        self.storage = get_object_storage()
 
-        for dir in [self.dir_image, self.dir_image_timeline, self.dir_assets]:
+        for dir in [self.dir_image, self.dir_image_timeline, self.dir_assets, self.dir_source]:
             dir.mkdir(parents=True, exist_ok=True)
 
     def delete_all_data(self) -> None:
+        self.storage.delete_prefix(self.dir_data)
         try:
             shutil.rmtree(self.dir_data)
         except Exception as e:
@@ -86,18 +90,27 @@ class RecipeDataService(BaseService):
         if not image_dir:
             image_dir = self.dir_image
 
-        extension = extension.replace(".", "")
-        image_path = image_dir.joinpath(f"original.{extension}")
-        image_path.unlink(missing_ok=True)
+        extension = extension.replace(".", "").lower()
+        if f".{extension}" not in img.IMAGE_EXTENSIONS:
+            raise ValueError(f"Unsupported image extension: {extension}")
+
+        source_dir = self.dir_source if image_dir == self.dir_image else image_dir.joinpath("source")
+        source_dir.mkdir(parents=True, exist_ok=True)
+        source_path = source_dir.joinpath("original-upload")
+        source_extension_path = source_dir.joinpath("original-extension.txt")
+        source_path.unlink(missing_ok=True)
 
         if isinstance(file_data, Path):
-            shutil.copy2(file_data, image_path)
+            shutil.copy2(file_data, source_path)
         elif isinstance(file_data, bytes):
-            with open(image_path, "ab") as f:
-                f.write(file_data)
+            source_path.write_bytes(file_data)
         else:
-            with open(image_path, "ab") as f:
+            with source_path.open("wb") as f:
                 shutil.copyfileobj(file_data, f)
+
+        image_path = image_dir.joinpath(f"original.{extension}")
+        image_path.unlink(missing_ok=True)
+        shutil.copy2(source_path, image_path)
 
         try:
             self.minifier.minify(image_path)
@@ -105,6 +118,14 @@ class RecipeDataService(BaseService):
             # Remove the partially-written file so corrupt images don't persist on disk.
             image_path.unlink(missing_ok=True)
             raise
+
+        self.storage.upload(source_path)
+        source_extension_path.write_text(extension, encoding="utf-8")
+        self.storage.upload(source_extension_path)
+        for image_type in RecipeImageTypes:
+            generated_path = image_dir.joinpath(image_type.value)
+            if generated_path.is_file():
+                self.storage.upload(generated_path)
 
         return image_path
 
@@ -115,6 +136,15 @@ class RecipeDataService(BaseService):
         for img_type in RecipeImageTypes:
             image_path = image_dir.joinpath(img_type.value)
             image_path.unlink(missing_ok=True)
+            self.storage.delete(image_path)
+
+        if image_dir == self.dir_image:
+            source_path = self.dir_source.joinpath("original-upload")
+            source_extension_path = self.dir_source.joinpath("original-extension.txt")
+            source_path.unlink(missing_ok=True)
+            source_extension_path.unlink(missing_ok=True)
+            self.storage.delete(source_path)
+            self.storage.delete(source_extension_path)
 
     async def scrape_image(self, image_url: str | dict[str, str] | list[str]) -> None:
         self.logger.info(f"Image URL: {image_url}")

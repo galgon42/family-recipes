@@ -10,6 +10,7 @@ from mealie.core.settings.static import APP_VERSION
 from mealie.services._base_service import BaseService
 from mealie.services.backups_v2.alchemy_exporter import AlchemyExporter
 from mealie.services.backups_v2.backup_file import BackupFile
+from mealie.services.storage import get_object_storage
 
 
 class BackupSchemaMismatch(Exception): ...
@@ -30,6 +31,7 @@ class BackupV2(BaseService):
         self.db_url: str = db_url or self.settings.DB_URL  # type: ignore
 
         self.db_exporter = AlchemyExporter(self.db_url)
+        self.storage = get_object_storage()
 
     def _sqlite(self) -> None:
         db_file = self.settings.DB_URL.removeprefix("sqlite:///")  # type: ignore
@@ -56,6 +58,10 @@ class BackupV2(BaseService):
         backup_file = self.directories.BACKUP_DIR / backup_name
 
         database_json = self.db_exporter.dump()
+        # Cloud Run's local data directory is only a cache. Materialize all
+        # durable media so a standard Mealie backup still includes it.
+        self.storage.materialize_prefix(self.directories.RECIPE_DATA_DIR)
+        self.storage.materialize_prefix(self.directories.USER_DIR)
 
         with ZipFile(backup_file, "w") as zip_file:
             zip_file.writestr("database.json", json.dumps(database_json))
@@ -129,5 +135,10 @@ class BackupV2(BaseService):
 
             self.logger.info("restoring data directory")
             self._copy_data(contents.data_directory)
+            # The bucket is dedicated to this Mealie instance. Replace its
+            # contents with the restored snapshot so stale media is removed.
+            self.storage.delete_prefix(self.directories.DATA_DIR)
+            self.storage.upload_tree(self.directories.RECIPE_DATA_DIR)
+            self.storage.upload_tree(self.directories.USER_DIR)
             self.logger.info("data directory restored successfully")
         self.logger.info("backup restore complete")

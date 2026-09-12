@@ -6,6 +6,7 @@ from starlette.responses import FileResponse
 
 from mealie.schema.recipe import Recipe
 from mealie.schema.recipe.recipe_timeline_events import RecipeTimelineEventOut
+from mealie.services.storage import get_object_storage
 
 router = APIRouter(prefix="/recipes")
 
@@ -24,7 +25,7 @@ async def get_recipe_img(recipe_id: UUID4, file_name: ImageType = ImageType.orig
     """
     recipe_image = Recipe.directory_from_id(recipe_id).joinpath("images", file_name.value)
 
-    if recipe_image.exists():
+    if get_object_storage().materialize(recipe_image):
         return FileResponse(recipe_image, media_type="image/webp")
     else:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
@@ -42,7 +43,7 @@ async def get_recipe_timeline_event_img(
         file_name.value
     )
 
-    if timeline_event_image.exists():
+    if get_object_storage().materialize(timeline_event_image):
         return FileResponse(timeline_event_image, media_type="image/webp")
     else:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
@@ -57,7 +58,7 @@ async def get_recipe_asset(recipe_id: UUID4, file_name: str):
     if not file.is_relative_to(asset_dir.resolve()):
         raise HTTPException(status.HTTP_400_BAD_REQUEST)
 
-    if file.exists():
+    if get_object_storage().materialize(file):
         # Force download and disable MIME sniffing so uploaded assets cannot be
         # served as active content in Mealie's origin.
         return FileResponse(
@@ -68,3 +69,28 @@ async def get_recipe_asset(recipe_id: UUID4, file_name: str):
         )
     else:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
+
+
+@router.get("/{recipe_id}/source")
+async def get_recipe_source(recipe_id: UUID4):
+    """Download the exact source bytes used for the recipe's current cover image."""
+    source_dir = Recipe.directory_from_id(recipe_id).joinpath("source")
+    source = source_dir.joinpath("original-upload")
+    extension_file = source_dir.joinpath("original-extension.txt")
+    storage = get_object_storage()
+
+    if not storage.materialize(source):
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+
+    extension = "bin"
+    if storage.materialize(extension_file):
+        stored_extension = extension_file.read_text(encoding="utf-8").strip().lower()
+        if stored_extension.isalnum() and len(stored_extension) <= 10:
+            extension = stored_extension
+
+    return FileResponse(
+        source,
+        filename=f"recipe-source.{extension}",
+        content_disposition_type="attachment",
+        headers={"X-Content-Type-Options": "nosniff"},
+    )

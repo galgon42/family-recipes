@@ -1,14 +1,14 @@
 # Cloud Run + Supabase deployment
 
-This directory deploys the pinned Mealie fork to Google Cloud Run and connects it to Supabase PostgreSQL. It is a **smoke-test baseline**, not yet a durable production deployment: upstream Mealie stores media and other runtime files on a local filesystem, while Cloud Run's writable filesystem is ephemeral.
+This directory deploys the pinned Mealie fork to Google Cloud Run and connects it to Supabase PostgreSQL and private Supabase Storage. The fork treats Cloud Run's writable filesystem as a disposable cache and keeps recipe media durable in object storage.
 
 ## Architecture
 
 - Cloud Run: Mealie web/API container
 - Artifact Registry: versioned container images
-- Google Secret Manager: Supabase database connection and, later, storage/OIDC credentials
+- Google Secret Manager: Supabase database and storage credentials plus persistent signing keys
 - Supabase PostgreSQL: Mealie application tables in a non-public `mealie` schema
-- Private Supabase Storage bucket: originals, generated recipe images, timeline photos, recipe assets, avatars, and durable exports after the storage adapter is complete
+- Private Supabase Storage bucket: originals, generated recipe images, timeline photos, recipe assets, and avatars
 
 ## Required setup
 
@@ -18,9 +18,10 @@ This directory deploys the pinned Mealie fork to Google Cloud Run and connects i
 4. Copy the **session pooler** connection string from Supabase's Connect panel. It uses port 5432 and works over IPv4. Change the scheme to `postgresql://` if the panel returns `postgres://`, because Mealie validates that exact scheme.
 5. Store the complete URL in Google Secret Manager under `supabase-postgres-url`. Never commit it.
 6. Enable Supabase Storage's S3 protocol and store its server-only credentials in Secret Manager as `supabase-s3-access-key-id` and `supabase-s3-secret-access-key`.
-7. Run `deploy.ps1 -ProjectId family-recipes-508022` from PowerShell.
+7. Store two independent, randomly generated 64-character values as `mealie-auth-secret` and `mealie-session-secret`.
+8. Run `deploy.ps1 -ProjectId family-recipes-508022` from PowerShell.
 
-The script creates the Artifact Registry repository and a dedicated runtime service account if needed, builds the exact source commit using Cloud Build, grants that service account access only to the named database secret, and deploys one always-allocated Cloud Run instance.
+The script creates the Artifact Registry repository and a dedicated runtime service account if needed, builds the exact source commit using Cloud Build, grants that service account access only to the five named secrets, and deploys one always-allocated Cloud Run instance.
 
 ## Why one instance with always-allocated CPU?
 

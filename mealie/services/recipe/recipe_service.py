@@ -4,7 +4,7 @@ import json
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
-from shutil import copytree, rmtree
+from shutil import copytree
 from textwrap import dedent
 from typing import Any
 from uuid import UUID, uuid4
@@ -30,6 +30,7 @@ from mealie.schema.user.user import PrivateUser, UserRatingCreate
 from mealie.services._base_service import BaseService
 from mealie.services.household_services.household_service import HouseholdService
 from mealie.services.recipe.recipe_data_service import RecipeDataService
+from mealie.services.storage import get_object_storage
 
 from .template_service import TemplateService
 
@@ -52,6 +53,7 @@ class RecipeServiceBase(BaseService):
 
         self.translator = translator
         self.t = translator.t
+        self.storage = get_object_storage()
 
         super().__init__()
 
@@ -143,6 +145,7 @@ class RecipeService(RecipeServiceBase):
         if recipe.assets is None:
             recipe.assets = []
 
+        self.storage.materialize_prefix(recipe.asset_dir)
         all_asset_files = [x.file_name for x in recipe.assets]
 
         for file in recipe.asset_dir.iterdir():
@@ -150,10 +153,10 @@ class RecipeService(RecipeServiceBase):
                 continue
             if file.name not in all_asset_files:
                 file.unlink()
+                self.storage.delete(file)
 
     def delete_assets(self, recipe: Recipe) -> None:
-        recipe_dir = recipe.directory
-        rmtree(recipe_dir, ignore_errors=True)
+        RecipeDataService(recipe.id).delete_all_data()
         self.logger.info(f"Recipe Directory Removed: {recipe.slug}")
 
     def _recipe_creation_factory(self, name: str, additional_attrs: dict | None = None) -> Recipe:
@@ -374,11 +377,13 @@ class RecipeService(RecipeServiceBase):
         try:
             new_service = RecipeDataService(new_recipe.id)
             old_service = RecipeDataService(old_recipe.id)
+            old_service.storage.materialize_prefix(old_service.dir_data)
             copytree(
                 old_service.dir_data,
                 new_service.dir_data,
                 dirs_exist_ok=True,
             )
+            new_service.storage.upload_tree(new_service.dir_data)
         except Exception as e:
             self.logger.error(f"Failed to copy assets from {old_recipe.slug} to {new_recipe.slug}: {e}")
 

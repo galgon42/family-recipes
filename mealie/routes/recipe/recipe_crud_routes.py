@@ -81,6 +81,7 @@ from mealie.services.scraper.scraper_strategies import (
     RecipeScraperOpenAI,
     RecipeScraperPackage,
 )
+from mealie.services.storage import get_object_storage
 
 from ._base import BaseRecipeController, JSONBytes
 
@@ -832,6 +833,8 @@ class RecipeController(BaseRecipeController):
 
         with dest.open("wb") as buffer:
             copyfileobj(file.file, buffer)
+
+        get_object_storage().upload(dest)
 
         if not dest.is_file():
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR)

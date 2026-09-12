@@ -125,7 +125,10 @@ def test_recipe_asset_served_as_attachment(
     recipe_id = recipe_response["id"]
     file_name = recipe_response["assets"][0]["fileName"]
 
-    media_response = api_client.get(f"/api/media/recipes/{recipe_id}/assets/{file_name}")
+    anonymous_response = api_client.get(f"/api/media/recipes/{recipe_id}/assets/{file_name}")
+    assert anonymous_response.status_code == 401
+
+    media_response = api_client.get(f"/api/media/recipes/{recipe_id}/assets/{file_name}", headers=unique_user.token)
     assert media_response.status_code == 200
     assert "attachment" in media_response.headers["content-disposition"].lower()
     assert media_response.headers["x-content-type-options"] == "nosniff"
@@ -150,3 +153,11 @@ def test_recipe_image_upload(api_client: TestClient, unique_user: TestUser, reci
     response = api_client.get(f"/api/recipes/{recipe_ingredient_only.slug}", headers=unique_user.token)
     recipe_respons = response.json()
     assert recipe_respons["image"] == image_version
+
+    source_url = f"/api/media/recipes/{recipe_respons['id']}/source"
+    assert api_client.get(source_url).status_code == 401
+
+    source_response = api_client.get(source_url, headers=unique_user.token)
+    assert source_response.status_code == 200
+    assert source_response.content == data.images_test_image_1.read_bytes()
+    assert "attachment" in source_response.headers["content-disposition"].lower()

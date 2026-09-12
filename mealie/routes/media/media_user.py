@@ -3,6 +3,7 @@ from pydantic import UUID4
 from starlette.responses import FileResponse
 
 from mealie.schema.user import PrivateUser
+from mealie.services.storage import get_object_storage
 
 router = APIRouter(prefix="/users")
 
@@ -17,7 +18,7 @@ async def get_user_image(user_id: UUID4, file_name: str):
     if not recipe_image.is_relative_to(user_dir.resolve()):
         raise HTTPException(status.HTTP_400_BAD_REQUEST)
 
-    if recipe_image.exists():
+    if get_object_storage().materialize(recipe_image):
         return FileResponse(recipe_image, media_type="image/webp")
     else:
         raise HTTPException(status.HTTP_404_NOT_FOUND)

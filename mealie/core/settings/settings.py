@@ -176,6 +176,31 @@ class AppSettings(AppLoggingSettings):
     ALLOW_SIGNUP: bool = False
     ALLOW_PASSWORD_LOGIN: bool = True
 
+    # ===============================================
+    # Supabase Object Storage
+
+    SUPABASE_STORAGE_S3_ENDPOINT: str | None = None
+    """S3-compatible Supabase Storage endpoint. Leave unset to use only the local filesystem."""
+
+    SUPABASE_STORAGE_S3_REGION: str | None = None
+    SUPABASE_STORAGE_BUCKET: str | None = None
+    SUPABASE_STORAGE_S3_ACCESS_KEY_ID: MaskedNoneString = None
+    SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY: MaskedNoneString = None
+
+    @property
+    def SUPABASE_STORAGE_ENABLED(self) -> bool:
+        values = (
+            self.SUPABASE_STORAGE_S3_ENDPOINT,
+            self.SUPABASE_STORAGE_S3_REGION,
+            self.SUPABASE_STORAGE_BUCKET,
+            self.SUPABASE_STORAGE_S3_ACCESS_KEY_ID,
+            self.SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY,
+        )
+        configured = [bool(value) for value in values]
+        if any(configured) and not all(configured):
+            raise ValueError("All Supabase Storage S3 settings must be configured together")
+        return all(configured)
+
     ALLOWED_IFRAME_HOSTS: str = ""
     """Comma-separated list of additional hostnames allowed as `<iframe>` sources in user content
     (recipe instructions, notes, descriptions). Extends `DEFAULT_ALLOWED_IFRAME_HOSTS`. Subdomains of
@@ -513,8 +538,12 @@ def app_settings_constructor(data_dir: Path, production: bool, env_file: Path, e
     directly, but rather through this factory function.
     """
     secret_settings = {
-        "SECRET": determine_secrets(data_dir, ".secret", production),
-        "SESSION_SECRET": determine_secrets(data_dir, ".session_secret", production),
+        # Explicit environment values keep signing stable on hosts with
+        # ephemeral filesystems, such as Cloud Run. Existing filesystem
+        # behavior remains the fallback for normal Mealie deployments.
+        "SECRET": os.environ.get("SECRET") or determine_secrets(data_dir, ".secret", production),
+        "SESSION_SECRET": os.environ.get("SESSION_SECRET")
+        or determine_secrets(data_dir, ".session_secret", production),
     }
     app_settings = AppSettings(
         _env_file=env_file,  # type: ignore

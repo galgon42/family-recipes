@@ -1,11 +1,16 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from mealie.core.config import get_app_dirs
+from mealie.core.dependencies import get_current_user
 
 from . import media_recipe, media_user
 
-media_router = APIRouter(prefix="/api/media", tags=["Recipe: Images and Assets"])
+media_router = APIRouter(
+    prefix="/api/media",
+    tags=["Recipe: Images and Assets"],
+    dependencies=[Depends(get_current_user)],
+)
 
 media_router.include_router(media_recipe.router)
 media_router.include_router(media_user.router)

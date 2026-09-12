@@ -22,6 +22,7 @@ from mealie.schema.response.pagination import PaginationQuery
 from mealie.services import urls
 from mealie.services.event_bus_service.event_types import EventOperation, EventRecipeTimelineEventData, EventTypes
 from mealie.services.recipe.recipe_data_service import RecipeDataService
+from mealie.services.storage import get_object_storage
 
 router = UserAPIRouter(route_class=MealieCrudRoute, prefix="/timeline/events")
 
@@ -117,6 +118,7 @@ class RecipeTimelineEventsController(BaseCrudController):
     @router.delete("/{item_id}", response_model=RecipeTimelineEventOut)
     def delete_one(self, item_id: UUID4):
         event = self.mixins.delete_one(item_id)
+        get_object_storage().delete_prefix(event.image_dir)
         if event.image_dir.exists():
             try:
                 shutil.rmtree(event.image_dir)

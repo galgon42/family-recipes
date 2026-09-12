@@ -46,6 +46,7 @@ dependencies = [
     "ingredient-parser-nlp==2.7.0",
     "pint==0.25.3",
     "httpx-curl-cffi==0.1.5",
+    "boto3==1.43.89",
 ]
 
 [project.scripts]

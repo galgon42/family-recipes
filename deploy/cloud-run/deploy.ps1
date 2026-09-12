@@ -22,18 +22,30 @@ $ErrorActionPreference = "Stop"
 $DatabaseSecret = "supabase-postgres-url"
 $StorageAccessKeySecret = "supabase-s3-access-key-id"
 $StorageSecretKeySecret = "supabase-s3-secret-access-key"
-$RequiredSecrets = @($DatabaseSecret, $StorageAccessKeySecret, $StorageSecretKeySecret)
+$AuthSecret = "mealie-auth-secret"
+$SessionSecret = "mealie-session-secret"
+$RequiredSecrets = @($DatabaseSecret, $StorageAccessKeySecret, $StorageSecretKeySecret, $AuthSecret, $SessionSecret)
 $RuntimeAccountName = "family-recipes-runtime"
 $RuntimeAccount = "$RuntimeAccountName@$ProjectId.iam.gserviceaccount.com"
 $ImageUri = "$Region-docker.pkg.dev/$ProjectId/$RepositoryName/mealie`:$ImageTag"
 $RepositoryRoot = Resolve-Path (Join-Path $PSScriptRoot "../..")
 
-if (-not (Get-Command gcloud -ErrorAction SilentlyContinue)) {
-    throw "Google Cloud CLI is not installed or is not available on PATH."
+$GCloudCommand = Get-Command gcloud -ErrorAction SilentlyContinue
+if ($GCloudCommand) {
+    $GCloudPath = $GCloudCommand.Source
+}
+else {
+    $BundledGCloud = Join-Path $env:LOCALAPPDATA "Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd"
+    if (Test-Path -LiteralPath $BundledGCloud) {
+        $GCloudPath = $BundledGCloud
+    }
+    else {
+        throw "Google Cloud CLI is not installed or is not available on PATH."
+    }
 }
 
 function Invoke-GCloud {
-    & gcloud @args
+    & $GCloudPath @args
     if ($LASTEXITCODE -ne 0) {
         throw "gcloud command failed: gcloud $($args -join ' ')"
     }
@@ -42,18 +54,18 @@ function Invoke-GCloud {
 Invoke-GCloud config set project $ProjectId
 Invoke-GCloud services enable run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com
 
-& gcloud artifacts repositories describe $RepositoryName --location $Region --project $ProjectId *> $null
+& $GCloudPath artifacts repositories describe $RepositoryName --location $Region --project $ProjectId *> $null
 if ($LASTEXITCODE -ne 0) {
     Invoke-GCloud artifacts repositories create $RepositoryName --location $Region --repository-format docker --description "Family Recipes container images" --project $ProjectId
 }
 
-& gcloud iam service-accounts describe $RuntimeAccount --project $ProjectId *> $null
+& $GCloudPath iam service-accounts describe $RuntimeAccount --project $ProjectId *> $null
 if ($LASTEXITCODE -ne 0) {
     Invoke-GCloud iam service-accounts create $RuntimeAccountName --display-name "Family Recipes Cloud Run" --project $ProjectId
 }
 
 foreach ($SecretName in $RequiredSecrets) {
-    & gcloud secrets describe $SecretName --project $ProjectId *> $null
+    & $GCloudPath secrets describe $SecretName --project $ProjectId *> $null
     if ($LASTEXITCODE -ne 0) {
         throw "Missing Secret Manager secret '$SecretName'. Add it before deploying."
     }
@@ -107,10 +119,10 @@ Invoke-GCloud run deploy $ServiceName `
     --timeout 300 `
     --no-cpu-throttling `
     --set-env-vars ($Environment -join ",") `
-    --set-secrets "POSTGRES_URL_OVERRIDE=$DatabaseSecret`:latest,SUPABASE_STORAGE_S3_ACCESS_KEY_ID=$StorageAccessKeySecret`:latest,SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY=$StorageSecretKeySecret`:latest" `
+    --set-secrets "POSTGRES_URL_OVERRIDE=$DatabaseSecret`:latest,SUPABASE_STORAGE_S3_ACCESS_KEY_ID=$StorageAccessKeySecret`:latest,SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY=$StorageSecretKeySecret`:latest,SECRET=$AuthSecret`:latest,SESSION_SECRET=$SessionSecret`:latest" `
     --project $ProjectId
 
-$ServiceUrl = (& gcloud run services describe $ServiceName --region $Region --project $ProjectId --format "value(status.url)").Trim()
+$ServiceUrl = (& $GCloudPath run services describe $ServiceName --region $Region --project $ProjectId --format "value(status.url)").Trim()
 if ($LASTEXITCODE -ne 0 -or -not $ServiceUrl) {
     throw "Deployment completed, but the service URL could not be read."
 }
@@ -119,5 +131,5 @@ if (-not $BaseUrl) {
     Invoke-GCloud run services update $ServiceName --region $Region --project $ProjectId --update-env-vars "BASE_URL=$ServiceUrl"
 }
 
-Write-Warning "Smoke-test deployment only: /tmp is ephemeral. Do not import family recipes until the Supabase Storage adapter and recovery test pass."
+Write-Warning "Complete the media upload and forced-revision recovery checks before importing irreplaceable family photos."
 Write-Host "Cloud Run service: $ServiceUrl"

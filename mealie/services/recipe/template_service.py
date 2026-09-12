@@ -5,6 +5,7 @@ from zipfile import ZipFile
 from mealie.schema.recipe import Recipe
 from mealie.schema.recipe.recipe_image_types import RecipeImageTypes
 from mealie.services._base_service import BaseService
+from mealie.services.storage import get_object_storage
 
 
 class TemplateType(enum.StrEnum):
@@ -93,6 +94,7 @@ class TemplateService(BaseService):
         self.__check_temp(self._render_zip)
 
         image_asset = recipe.image_dir.joinpath(RecipeImageTypes.original.value)
+        get_object_storage().materialize(image_asset)
 
         if self.temp is None:
             raise ValueError("Temporary directory must be provided for method _render_zip")

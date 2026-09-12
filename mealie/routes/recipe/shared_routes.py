@@ -13,6 +13,7 @@ from mealie.repos.all_repositories import get_repositories
 from mealie.schema.recipe import Recipe
 from mealie.schema.recipe.recipe_image_types import RecipeImageTypes
 from mealie.schema.response import ErrorResponse
+from mealie.services.storage import get_object_storage
 
 router = APIRouter()
 
@@ -45,6 +46,7 @@ def get_shared_recipe_as_zip(token_id: UUID4, session: Session = Depends(generat
 
     recipe = get_shared_recipe(token_id=token_id, session=session)
     image_asset = recipe.image_dir.joinpath(RecipeImageTypes.original.value)
+    get_object_storage().materialize(image_asset)
 
     with get_temporary_zip_path(auto_unlink=False) as temp_path:
         with ZipFile(temp_path, "w") as myzip:
