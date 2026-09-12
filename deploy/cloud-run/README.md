@@ -24,6 +24,16 @@ This directory deploys the pinned Mealie fork to Google Cloud Run and connects i
 
 The script creates the Artifact Registry repository and a dedicated runtime service account if needed, builds the exact source commit using Cloud Build, grants that service account access only to the seven named secrets, enables Google OIDC without automatic signup, and deploys one always-allocated Cloud Run instance. Password login remains available as a recovery path.
 
+## Media backup
+
+Download a standard Mealie backup from **Admin > Backups**, then separately export the private Supabase bucket:
+
+```powershell
+.\deploy\cloud-run\backup-media.ps1 -ProjectId family-recipes-508022 -OutputDirectory C:\path\to\empty\backup-directory
+```
+
+The media export preserves every object key and writes `manifest.json` with a SHA-256 checksum for each object. Store the Mealie ZIP and media export outside Cloud Run and outside the Supabase project. Never commit either backup.
+
 ## Why one instance with always-allocated CPU?
 
 Mealie runs scheduled maintenance inside the web process. A Cloud Run instance that scales to zero or receives CPU only during requests cannot execute that work reliably. One instance is also mandatory until media operations are made safe for concurrent instances. This setting has a continuous cost.
